@@ -14,8 +14,7 @@
     "BlockBreakMixin",
     "ChunkLoadMixin",
     "PlayerInteractMixin",
-    "ServerPlayerMixin",
-    "WorldSeedMixin"
+    "ServerPlayerMixin"
   ],
   "injectors": {
     "defaultRequire": 1
