@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "nekoantixray",
+  "version": "${version}",
+  "name": "NekoAntiXray",
+  "description": "高效且轻量的反Xray插件的Fabric版本",
+  "authors": [
+    "SakuyaAyane",
+    "Fabric适配版贡献者"
+  ],
+  "contact": {
+    "homepage": "https://github.com/yourusername/NekoAntiXray-Fabric",
+    "issues": "https://github.com/yourusername/NekoAntiXray-Fabric/issues"
+  },
+  "license": "MIT",
+  "icon": "assets/nekoantixray/icon.png",
+  "environment": "server",
+  "entrypoints": {
+    "main": [
+      "sakuyaayane.nekoantixray.NekoAntiXray"
+    ]
+  },
+  "mixins": [
+    "nekoantixray.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.14.19",
+    "fabric-api": ">=0.78.0",
+    "minecraft": "~1.19.4",
+    "java": ">=17"
+  }
+}

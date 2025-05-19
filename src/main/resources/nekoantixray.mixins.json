@@ -1,0 +1,23 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "sakuyaayane.nekoantixray.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [
+    "BlockBreakMixin",
+    "ChunkLoadMixin",
+    "PlayerInteractMixin",
+    "ServerPlayerMixin",
+    "WorldSeedMixin"
+  ],
+  "server": [
+    "BlockBreakMixin",
+    "ChunkLoadMixin",
+    "PlayerInteractMixin",
+    "ServerPlayerMixin",
+    "WorldSeedMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
