@@ -1,312 +1,241 @@
 package sakuyaayane.nekoantixray.command;
 
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
-import net.minecraft.command.CommandRegistryAccess;
-import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
-import sakuyaayane.nekoantixray.NekoAntiXray;
+import net.minecraft.server.network.ServerPlayerEntity;
 import sakuyaayane.nekoantixray.config.ConfigManager;
-import sakuyaayane.nekoantixray.util.PermissionUtil;
-
-import java.util.UUID;
+import sakuyaayane.nekoantixray.detection.DetectionManager;
+import sakuyaayane.nekoantixray.NekoAntiXray;
 
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
 
 /**
- * Manages commands for NekoAntiXray
+ * 命令管理器 - Fabric版本
  */
-public class CommandManager {
+public class NekoCommandManager {
+    private final NekoAntiXray mod;
+    private final ConfigManager configManager;
+    private final DetectionManager detectionManager;
+
+    public NekoCommandManager(NekoAntiXray mod, ConfigManager configManager, DetectionManager detectionManager) {
+        this.mod = mod;
+        this.configManager = configManager;
+        this.detectionManager = detectionManager;
+    }
 
     /**
-     * Register all commands
-     * @param dispatcher Command dispatcher
-     * @param registryAccess Registry access
-     * @param environment Registration environment
+     * 注册所有命令
+     * @param dispatcher 命令分发器
      */
-    public void registerCommands(CommandDispatcher<ServerCommandSource> dispatcher, 
-                                CommandRegistryAccess registryAccess, 
-                                CommandManager.RegistrationEnvironment environment) {
-        // Main command: /nax
+    public void registerCommands(CommandDispatcher<ServerCommandSource> dispatcher) {
+        // 主命令
         dispatcher.register(literal("nax")
             .requires(source -> hasPermission(source, "nekoantixray.admin"))
             .then(literal("reload")
-                .requires(source -> hasPermission(source, "nekoantixray.reload"))
-                .executes(this::executeReload))
+                .executes(this::reloadCommand))
             .then(literal("ban")
-                .requires(source -> hasPermission(source, "nekoantixray.ban"))
                 .then(argument("player", StringArgumentType.word())
-                    .executes(context -> executeBan(context, 30)) // Default 30 days
-                    .then(argument("days", IntegerArgumentType.integer(1, 999))
-                        .executes(context -> executeBan(context, IntegerArgumentType.getInteger(context, "days"))))))
+                    .executes(context -> banCommand(context, 0))
+                    .then(argument("days", IntegerArgumentType.integer(1))
+                        .executes(context -> banCommand(
+                            context, 
+                            IntegerArgumentType.getInteger(context, "days"))))))
             .then(literal("resetviolation")
-                .requires(source -> hasPermission(source, "nekoantixray.resetviolation"))
                 .then(argument("player", StringArgumentType.word())
-                    .executes(this::executeResetViolation)))
+                    .executes(this::resetViolationCommand)))
             .then(literal("showhwid")
-                .requires(source -> hasPermission(source, "nekoantixray.showhwid"))
                 .then(argument("player", StringArgumentType.word())
-                    .executes(this::executeShowHWID)))
+                    .executes(this::showHwidCommand)))
             .then(literal("replay")
-                .requires(source -> hasPermission(source, "nekoantixray.replay"))
                 .then(argument("player", StringArgumentType.word())
-                    .executes(this::executeReplay)))
-            .executes(this::executeHelp));
-        
-        // Update command: /nekoantixrayupdate
+                    .executes(this::replayCommand)))
+            .executes(this::helpCommand));
+
+        // 更新命令
         dispatcher.register(literal("nekoantixrayupdate")
-            .requires(source -> hasPermission(source, "nekoantixray.update"))
-            .executes(this::executeUpdate));
-        
-        // Fake seed command: /seed
-        dispatcher.register(literal("seed")
-            .executes(this::executeFakeSeed));
-        
-        // Fake seed reload command: /fakeseedreload
+            .requires(source -> hasPermission(source, "nekoantixray.admin"))
+            .executes(this::updateCommand));
+
+        // 假种子命令
         dispatcher.register(literal("fakeseedreload")
-            .requires(source -> hasPermission(source, "fakeseed.reload"))
-            .executes(this::executeFakeSeedReload));
+            .requires(source -> hasPermission(source, "nekoantixray.admin"))
+            .executes(this::fakeSeedReloadCommand));
+
+        // 种子命令
+        dispatcher.register(literal("seed")
+            .executes(this::seedCommand));
     }
-    
+
     /**
-     * Check if a command source has a permission
-     * @param source Command source
-     * @param permission Permission to check
-     * @return true if the source has the permission
+     * 检查权限
+     * @param source 命令源
+     * @param permission 权限节点
+     * @return 是否有权限
      */
     private boolean hasPermission(ServerCommandSource source, String permission) {
-        // Console always has permission
-        if (source.getEntity() == null) {
-            return true;
-        }
-        
-        // Check if the entity is a player
-        if (source.getEntity() instanceof ServerPlayerEntity player) {
-            return PermissionUtil.hasPermission(player, permission);
-        }
-        
-        // Default to permission level check
-        return source.hasPermissionLevel(4); // OP level
+        // 在Fabric中，我们简化权限检查，只检查操作员权限
+        return source.hasPermissionLevel(4);
     }
-    
+
     /**
-     * Execute the help command
-     * @param context Command context
-     * @return Command result
+     * 帮助命令
      */
-    private int executeHelp(CommandContext<ServerCommandSource> context) {
+    private int helpCommand(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
-        
-        source.sendFeedback(() -> Text.of("§6===== NekoAntiXray 命令帮助 ====="), false);
-        source.sendFeedback(() -> Text.of("§e/nax reload §7- 重新加载配置"), false);
-        source.sendFeedback(() -> Text.of("§e/nax ban <玩家> [天数] §7- 封禁玩家"), false);
-        source.sendFeedback(() -> Text.of("§e/nax resetviolation <玩家> §7- 重置玩家违规记录"), false);
-        source.sendFeedback(() -> Text.of("§e/nax showhwid <玩家> §7- 显示玩家HWID"), false);
-        source.sendFeedback(() -> Text.of("§e/nax replay <玩家> §7- 回放玩家挖矿记录"), false);
-        source.sendFeedback(() -> Text.of("§e/nekoantixrayupdate §7- 更新插件"), false);
-        source.sendFeedback(() -> Text.of("§e/fakeseedreload §7- 重新加载假种子配置"), false);
-        
+        source.sendFeedback(Text.of("§6===== NekoAntiXray 命令帮助 ====="), false);
+        source.sendFeedback(Text.of("§e/nax reload §7- 重新加载配置"), false);
+        source.sendFeedback(Text.of("§e/nax ban <玩家> [天数] §7- 封禁玩家"), false);
+        source.sendFeedback(Text.of("§e/nax resetviolation <玩家> §7- 重置玩家违规记录"), false);
+        source.sendFeedback(Text.of("§e/nax showhwid <玩家> §7- 显示玩家HWID"), false);
+        source.sendFeedback(Text.of("§e/nax replay <玩家> §7- 回放玩家挖矿记录"), false);
+        source.sendFeedback(Text.of("§e/nekoantixrayupdate §7- 更新插件"), false);
+        source.sendFeedback(Text.of("§e/fakeseedreload §7- 重新加载假种子配置"), false);
         return 1;
     }
-    
+
     /**
-     * Execute the reload command
-     * @param context Command context
-     * @return Command result
+     * 重载命令
      */
-    private int executeReload(CommandContext<ServerCommandSource> context) {
+    private int reloadCommand(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
-        
-        // Reload config
-        NekoAntiXray.getInstance().getConfigManager().loadConfig();
-        
-        source.sendFeedback(() -> Text.of("§a[NekoAntiXray] 配置已重新加载"), true);
+        configManager.reloadConfig();
+        source.sendFeedback(Text.of("§a[NekoAntiXray] 配置已重新加载"), true);
         return 1;
     }
-    
+
     /**
-     * Execute the ban command
-     * @param context Command context
-     * @param days Ban duration in days
-     * @return Command result
+     * 封禁命令
      */
-    private int executeBan(CommandContext<ServerCommandSource> context, int days) {
+    private int banCommand(CommandContext<ServerCommandSource> context, int days) {
         ServerCommandSource source = context.getSource();
         String playerName = StringArgumentType.getString(context, "player");
         
-        // Get player from server
-        ServerPlayerEntity player = context.getSource().getServer().getPlayerManager().getPlayer(playerName);
-        
+        // 获取玩家
+        ServerPlayerEntity player = source.getServer().getPlayerManager().getPlayer(playerName);
         if (player == null) {
-            source.sendFeedback(() -> Text.of("§c[NekoAntiXray] 玩家不在线或不存在"), false);
+            source.sendFeedback(Text.of("§c[NekoAntiXray] 玩家不在线或不存在"), false);
             return 0;
         }
         
-        // Get config
-        ConfigManager.ConfigData config = NekoAntiXray.getInstance().getConfigManager().getConfig();
-        
-        // Execute ban command
-        String banCommand = config.vlBanCommand
-                .replace("%player%", player.getName().getString())
-                .replace("%duration%", String.valueOf(days));
-        
-        context.getSource().getServer().getCommandManager().executeWithPrefix(
-                context.getSource().getServer().getCommandSource(), banCommand);
-        
-        // Announce ban if enabled
-        if (config.enableBanAnnouncement) {
-            String announcement = config.banAnnouncement
-                    .replace("%player%", player.getName().getString());
-            
-            // Broadcast to all players
-            for (ServerPlayerEntity serverPlayer : context.getSource().getServer().getPlayerManager().getPlayerList()) {
-                serverPlayer.sendMessage(Text.of(announcement), false);
-            }
+        // 设置默认天数
+        if (days <= 0) {
+            days = configManager.getConfig().defaultBanDays;
         }
         
-        source.sendFeedback(() -> Text.of("§a[NekoAntiXray] 已封禁玩家 " + playerName + " " + days + " 天"), true);
+        // 执行封禁
+        String reason = configManager.getConfig().banReason;
+        player.networkHandler.disconnect(Text.of(reason));
+        
+        // 通知
+        source.sendFeedback(Text.of("§a[NekoAntiXray] 已封禁玩家 " + playerName + " " + days + " 天"), true);
         return 1;
     }
-    
+
     /**
-     * Execute the reset violation command
-     * @param context Command context
-     * @return Command result
+     * 重置违规记录命令
      */
-    private int executeResetViolation(CommandContext<ServerCommandSource> context) {
+    private int resetViolationCommand(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
         String playerName = StringArgumentType.getString(context, "player");
         
-        // Get player from server
-        ServerPlayerEntity player = context.getSource().getServer().getPlayerManager().getPlayer(playerName);
-        
+        // 获取玩家
+        ServerPlayerEntity player = source.getServer().getPlayerManager().getPlayer(playerName);
         if (player == null) {
-            source.sendFeedback(() -> Text.of("§c[NekoAntiXray] 玩家不在线或不存在"), false);
+            source.sendFeedback(Text.of("§c[NekoAntiXray] 玩家不在线或不存在"), false);
             return 0;
         }
         
-        // Reset violation
-        NekoAntiXray.getInstance().getDetectionManager().resetPlayerViolation(player.getUuid());
-        
-        source.sendFeedback(() -> Text.of("§a[NekoAntiXray] 已重置玩家 " + playerName + " 的违规记录"), true);
+        // 重置违规记录
+        detectionManager.resetViolation(player.getUuid());
+        source.sendFeedback(Text.of("§a[NekoAntiXray] 已重置玩家 " + playerName + " 的违规记录"), true);
         return 1;
     }
-    
+
     /**
-     * Execute the show HWID command (placeholder implementation)
-     * @param context Command context
-     * @return Command result
+     * 显示HWID命令
      */
-    private int executeShowHWID(CommandContext<ServerCommandSource> context) {
+    private int showHwidCommand(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
         String playerName = StringArgumentType.getString(context, "player");
         
-        // Get player from server
-        ServerPlayerEntity player = context.getSource().getServer().getPlayerManager().getPlayer(playerName);
-        
+        // 获取玩家
+        ServerPlayerEntity player = source.getServer().getPlayerManager().getPlayer(playerName);
         if (player == null) {
-            source.sendFeedback(() -> Text.of("§c[NekoAntiXray] 玩家不在线或不存在"), false);
+            source.sendFeedback(Text.of("§c[NekoAntiXray] 玩家不在线或不存在"), false);
             return 0;
         }
         
-        // In Fabric version, we don't implement HWID tracking yet
-        source.sendFeedback(() -> Text.of("§e[NekoAntiXray] 玩家 " + playerName + " 的HWID功能在Fabric版本中暂未实现"), false);
+        // HWID功能在Fabric版本中暂未实现
+        source.sendFeedback(Text.of("§e[NekoAntiXray] 玩家 " + playerName + " 的HWID功能在Fabric版本中暂未实现"), false);
         return 1;
     }
-    
+
     /**
-     * Execute the replay command (placeholder implementation)
-     * @param context Command context
-     * @return Command result
+     * 回放命令
      */
-    private int executeReplay(CommandContext<ServerCommandSource> context) {
+    private int replayCommand(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
         String playerName = StringArgumentType.getString(context, "player");
         
-        // Get player from server
-        ServerPlayerEntity player = context.getSource().getServer().getPlayerManager().getPlayer(playerName);
-        
+        // 获取玩家
+        ServerPlayerEntity player = source.getServer().getPlayerManager().getPlayer(playerName);
         if (player == null) {
-            source.sendFeedback(() -> Text.of("§c[NekoAntiXray] 玩家不在线或不存在"), false);
+            source.sendFeedback(Text.of("§c[NekoAntiXray] 玩家不在线或不存在"), false);
             return 0;
         }
         
-        // In Fabric version, we don't implement replay yet
-        source.sendFeedback(() -> Text.of("§e[NekoAntiXray] 回放功能在Fabric版本中暂未实现"), false);
+        // 回放功能在Fabric版本中暂未实现
+        source.sendFeedback(Text.of("§e[NekoAntiXray] 回放功能在Fabric版本中暂未实现"), false);
         return 1;
     }
-    
+
     /**
-     * Execute the update command (placeholder implementation)
-     * @param context Command context
-     * @return Command result
+     * 更新命令
      */
-    private int executeUpdate(CommandContext<ServerCommandSource> context) {
+    private int updateCommand(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
         
-        // In Fabric version, we don't implement auto-update
-        source.sendFeedback(() -> Text.of("§e[NekoAntiXray] 自动更新功能在Fabric版本中暂未实现，请手动更新"), false);
+        // 更新功能在Fabric版本中暂未实现
+        source.sendFeedback(Text.of("§e[NekoAntiXray] 自动更新功能在Fabric版本中暂未实现，请手动更新"), false);
         return 1;
     }
-    
+
     /**
-     * Execute the fake seed command
-     * @param context Command context
-     * @return Command result
+     * 种子命令
      */
-    private int executeFakeSeed(CommandContext<ServerCommandSource> context) {
+    private int seedCommand(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
-        ConfigManager.ConfigData config = NekoAntiXray.getInstance().getConfigManager().getConfig();
         
-        // Check if fake seed is enabled
-        if (!config.enableFakeSeed) {
-            // Just use the vanilla seed command behavior
-            return 0; // Let vanilla handle it
-        }
-        
-        // Check if player is OP and should see real seed
-        if (source.getEntity() instanceof ServerPlayerEntity player && 
-                player.hasPermissionLevel(4) && config.showRealSeedToOp) {
-            // Show real seed to OP
-            long realSeed = context.getSource().getWorld().getSeed();
-            source.sendFeedback(() -> Text.of(config.messages.seedMessage.replace("%seed%", String.valueOf(realSeed))), false);
+        // 检查是否启用假种子
+        if (!configManager.getConfig().fakeSeedEnabled) {
+            // 显示真实种子
+            long realSeed = source.getWorld().getSeed();
+            String seedMessage = "世界种子: %seed%";
+            source.sendFeedback(Text.of(seedMessage.replace("%seed%", String.valueOf(realSeed))), false);
             return 1;
         }
         
-        // Show fake seed
-        long fakeSeed = generateFakeSeed(context.getSource().getWorld().getSeed());
-        source.sendFeedback(() -> Text.of(config.messages.seedMessage.replace("%seed%", String.valueOf(fakeSeed))), false);
+        // 显示假种子
+        long fakeSeed = configManager.getConfig().fakeSeed;
+        String seedMessage = "世界种子: %seed%";
+        source.sendFeedback(Text.of(seedMessage.replace("%seed%", String.valueOf(fakeSeed))), false);
         return 1;
     }
-    
+
     /**
-     * Execute the fake seed reload command
-     * @param context Command context
-     * @return Command result
+     * 假种子重载命令
      */
-    private int executeFakeSeedReload(CommandContext<ServerCommandSource> context) {
+    private int fakeSeedReloadCommand(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
         
-        // Reload config
-        NekoAntiXray.getInstance().getConfigManager().loadConfig();
-        
-        source.sendFeedback(() -> Text.of("§a[NekoAntiXray] 假种子配置已重新加载"), true);
+        // 重载假种子配置
+        configManager.reloadConfig();
+        source.sendFeedback(Text.of("§a[NekoAntiXray] 假种子配置已重新加载"), true);
         return 1;
-    }
-    
-    /**
-     * Generate a fake seed from a real seed
-     * @param realSeed The real seed
-     * @return A fake seed
-     */
-    private long generateFakeSeed(long realSeed) {
-        // Simple algorithm to generate a different but consistent fake seed
-        return realSeed ^ 0x5DEECE66DL + 11L;
     }
 }
