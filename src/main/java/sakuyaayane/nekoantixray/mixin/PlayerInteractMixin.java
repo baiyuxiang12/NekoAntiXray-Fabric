@@ -1,31 +1,34 @@
 package sakuyaayane.nekoantixray.mixin;
 
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import sakuyaayane.nekoantixray.NekoAntiXray;
-import sakuyaayane.nekoantixray.config.ConfigManager;
-import sakuyaayane.nekoantixray.util.PermissionUtil;
 
-@Mixin(PlayerEntity.class)
+/**
+ * 玩家交互Mixin - 监听玩家移动和交互事件
+ */
+@Mixin(ServerPlayerEntity.class)
 public class PlayerInteractMixin {
-
-    @Inject(method = "interact", at = @At("HEAD"))
-    private void onPlayerInteract(PlayerEntity player, Hand hand, CallbackInfoReturnable<ActionResult> cir) {
-        // Only process on server side and for server players
-        if (player.getWorld().isClient || !(player instanceof ServerPlayerEntity)) {
-            return;
-        }
+    
+    private int tickCounter = 0;
+    
+    /**
+     * 注入到tick方法，监听玩家tick事件
+     */
+    @Inject(method = "tick", at = @At("TAIL"))
+    private void onPlayerTick(CallbackInfo ci) {
+        ServerPlayerEntity player = (ServerPlayerEntity)(Object)this;
+        World world = player.getWorld();
         
-        // This is where we could implement additional interaction monitoring
-        // For example, tracking when players use certain items or interact with specific blocks
-        // that might be relevant to anti-xray detection
+        // 每20tick（约1秒）检查一次
+        if (tickCounter++ % 20 == 0) {
+            // 为玩家生成假矿石
+            NekoAntiXray.getInstance().getFakeOreManager().generateFakeOresForPlayer(player, world);
+        }
     }
 }
