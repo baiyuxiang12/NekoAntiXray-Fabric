@@ -11,7 +11,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import sakuyaayane.nekoantixray.NekoAntiXray;
 
 /**
- * 区块加载Mixin - 监听区块加载和卸载事件
+ * 区块加载Mixin - 监听区块加载事件
+ * 注意：scheduleUnload方法在Minecraft 1.19.4中不存在，已移除相关注入点
  */
 @Mixin(ChunkHolder.class)
 public class ChunkLoadMixin {
@@ -29,12 +30,13 @@ public class ChunkLoadMixin {
         // 假矿石生成将在玩家移动时触发
     }
     
-    /**
-     * 注入到scheduleUnload方法，监听区块卸载
-     */
-    @Inject(method = "scheduleUnload", at = @At("HEAD"))
-    private void onChunkUnload(ChunkPos pos, ServerWorld world, CallbackInfo ci) {
-        // 区块卸载时，清理假矿石
-        NekoAntiXray.getInstance().getFakeOreManager().clearChunk(pos);
-    }
+    // 原scheduleUnload方法注入点已移除，因为该方法在Minecraft 1.19.4中不存在
+    // 如需监听区块卸载事件，请考虑使用Fabric API的ServerWorldEvents.UNLOAD_CHUNK事件
+    // 或在NekoAntiXray主类中添加以下代码：
+    /*
+    ServerWorldEvents.UNLOAD_CHUNK.register((world, chunk) -> {
+        ChunkPos pos = chunk.getPos();
+        getFakeOreManager().clearChunk(pos);
+    });
+    */
 }
