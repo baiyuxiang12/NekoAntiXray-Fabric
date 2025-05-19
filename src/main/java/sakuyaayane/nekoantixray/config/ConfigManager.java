@@ -2,9 +2,9 @@ package sakuyaayane.nekoantixray.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
 import net.fabricmc.loader.api.FabricLoader;
-import sakuyaayane.nekoantixray.NekoAntiXray;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileReader;
@@ -16,165 +16,112 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Manages configuration for NekoAntiXray
+ * 配置管理器 - Fabric版本
  */
 public class ConfigManager {
-    private final Path configDir;
+    private static final Logger LOGGER = LoggerFactory.getLogger("nekoantixray");
+    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    private final Path configDir = FabricLoader.getInstance().getConfigDir().resolve("nekoantixray");
     private final File configFile;
-    private final Gson gson;
-    
-    private ConfigData configData;
-    
+    private ConfigData config;
+
     public ConfigManager() {
-        this.configDir = FabricLoader.getInstance().getConfigDir().resolve(NekoAntiXray.MOD_ID);
-        this.configFile = configDir.resolve("config.json").toFile();
-        this.gson = new GsonBuilder().setPrettyPrinting().create();
-        this.configData = new ConfigData();
-    }
-    
-    public void loadConfig() {
+        // 创建配置目录
         try {
-            if (!Files.exists(configDir)) {
-                Files.createDirectories(configDir);
-            }
-            
-            if (configFile.exists()) {
-                try (FileReader reader = new FileReader(configFile)) {
-                    configData = gson.fromJson(reader, ConfigData.class);
-                    NekoAntiXray.LOGGER.info("Configuration loaded successfully");
-                }
-            } else {
-                // Create default config
-                saveConfig();
-                NekoAntiXray.LOGGER.info("Created default configuration");
-            }
+            Files.createDirectories(configDir);
         } catch (IOException e) {
-            NekoAntiXray.LOGGER.error("Failed to load configuration", e);
+            LOGGER.error("创建配置目录失败", e);
         }
+
+        // 设置配置文件
+        configFile = configDir.resolve("config.json").toFile();
+
+        // 加载配置
+        loadConfig();
     }
-    
-    public void saveConfig() {
-        try {
-            if (!Files.exists(configDir)) {
-                Files.createDirectories(configDir);
-            }
-            
-            try (FileWriter writer = new FileWriter(configFile)) {
-                gson.toJson(configData, writer);
-                NekoAntiXray.LOGGER.info("Configuration saved successfully");
-            }
-        } catch (IOException e) {
-            NekoAntiXray.LOGGER.error("Failed to save configuration", e);
-        }
-    }
-    
-    public ConfigData getConfig() {
-        return configData;
-    }
-    
+
     /**
-     * Attempts to migrate from Bukkit YAML config to Fabric JSON config
-     * @param yamlConfigPath Path to the original YAML config file
-     * @return true if migration was successful
+     * 加载配置
      */
-    public boolean migrateFromBukkitConfig(String yamlConfigPath) {
-        // This would require a YAML parser library
-        // For now, we'll just create a placeholder for this functionality
-        NekoAntiXray.LOGGER.info("Config migration from Bukkit not implemented yet");
-        return false;
+    private void loadConfig() {
+        if (configFile.exists()) {
+            try (FileReader reader = new FileReader(configFile)) {
+                config = gson.fromJson(reader, ConfigData.class);
+                LOGGER.info("配置已加载");
+            } catch (IOException e) {
+                LOGGER.error("加载配置失败", e);
+                createDefaultConfig();
+            }
+        } else {
+            createDefaultConfig();
+        }
     }
-    
+
     /**
-     * Configuration data class
+     * 创建默认配置
+     */
+    private void createDefaultConfig() {
+        config = new ConfigData();
+        saveConfig();
+        LOGGER.info("已创建默认配置");
+    }
+
+    /**
+     * 保存配置
+     */
+    private void saveConfig() {
+        try (FileWriter writer = new FileWriter(configFile)) {
+            gson.toJson(config, writer);
+            LOGGER.info("配置已保存");
+        } catch (IOException e) {
+            LOGGER.error("保存配置失败", e);
+        }
+    }
+
+    /**
+     * 重新加载配置
+     */
+    public void reloadConfig() {
+        loadConfig();
+    }
+
+    /**
+     * 获取配置
+     */
+    public ConfigData getConfig() {
+        return config;
+    }
+
+    /**
+     * 配置数据类
      */
     public static class ConfigData {
-        // Detection settings
-        public boolean enableXrayDetection = true;
-        public boolean enableAlgoAntiXray = false;
-        public boolean enableSameChunkDetection = true;
+        // 基本设置
+        public boolean enabled = true;
+        public int defaultBanDays = 30;
+        public String banReason = "§c您因使用矿物透视被封禁";
         
-        // Fake ore generation settings
-        public int fakeOreCount = 15;
-        public int fakeOreLifetime = 100;
-        public int fakeOreDistanceLimit = 12;
-        public int fakeOrePlayerDistanceLimit = 12;
-        public int fakeOreGenerationCooldown = 100;
+        // 检测设置
+        public int maxViolation = 10;
+        public int violationDecay = 1;
+        public int violationDecayInterval = 60;
         
-        // X-change range
-        public int xChangeMin = -15;
-        public int xChangeMax = 20;
+        // 假矿石设置
+        public boolean fakeOreEnabled = true;
+        public int fakeOreDistance = 20;
+        public int fakeOreAmount = 3;
+        public int fakeOreCooldown = 5;
+        public List<String> fakeOreTypes = new ArrayList<String>() {{
+            add("minecraft:diamond_ore");
+            add("minecraft:deepslate_diamond_ore");
+            add("minecraft:ancient_debris");
+        }};
         
-        // Z-change range
-        public int zChangeMin = -15;
-        public int zChangeMax = 20;
+        // 假种子设置
+        public boolean fakeSeedEnabled = true;
+        public long fakeSeed = 114514;
         
-        // Y-change range
-        public int yChangeMin = -10;
-        public int yChangeMax = 10;
-        
-        // Amount range
-        public int amountMin = 5;
-        public int amountMax = 7;
-        
-        // Violation settings
-        public double vlAddBreakSelf = 1.0;
-        public double vlAddBreakOther = 2.0;
-        public boolean vlBanEnable = true;
-        public double vlBanThreshold = 10.0;
-        public String vlBanCommand = "ban %player% %duration% 使用X-Ray外挂";
-        
-        // Continuous increase settings
-        public int continuousIncreaseCount = 3;
-        public int continuousIncreaseInterval = 60;
-        
-        // Ban settings
-        public String banAnnouncement = "§c玩家 %player% 因使用作弊被封禁！";
-        public String banDetail = "§7原因: §f%reason% ";
-        public String banReason = "使用作弊客户端 (VL: %vl%)";
-        public int banDuration = 30;
-        public String customBanMessage = "&c你已被此服务器封禁！\n&7原因: &f%s\n&7封禁时长: &f%s\n&7如果你认为这是一个错误，请联系服务器管理员。\n&d[NekoAntiXray] &6高效且轻量反Xray插件 By SakuyaAyane";
-        
-        // Other settings
-        public boolean showLocationInConsole = false;
-        public boolean enableBanAnnouncement = true;
-        public int violationCooldown = 10;
-        public int violationDecreaseInterval = 300;
-        public double violationDecreaseAmount = 1.0;
-        
-        // Vertical distribution settings
-        public boolean verticalDistributionEnabled = true;
-        public int verticalDistributionRange = 5;
-        public int verticalDistributionMinDifference = 2;
-        public boolean verticalDistributionDebug = false;
-        
-        // Replay settings
-        public boolean replayEnabled = true;
-        public int replayRecordDuration = 300;
-        
-        // FakeSeed settings
-        public boolean enableFakeSeed = true;
-        public boolean showRealSeedToOp = false;
-        
-        // AntiSeedCracker settings
-        public boolean enableAntiSeedCracker = true;
-        public boolean modifyHashedSeed = true;
-        public boolean modifyEndStructures = true;
-        public List<String> endStructureWorlds = new ArrayList<>();
-        public boolean modifyEndSpikes = true;
-        public String endSpikesMode = "swap";
-        public boolean modifyEndCities = true;
-        
-        // Blacklist settings
-        public List<String> blacklistOres = new ArrayList<>();
-        public List<String> blacklistWorlds = new ArrayList<>();
-        
-        public ConfigData() {
-            // Initialize default blacklists
-            blacklistOres.add("COAL_ORE");
-            blacklistWorlds.add("world_the_end");
-            
-            // Initialize default end structure worlds
-            endStructureWorlds.add("world_the_end");
-        }
+        // 调试设置
+        public boolean debug = false;
     }
 }
