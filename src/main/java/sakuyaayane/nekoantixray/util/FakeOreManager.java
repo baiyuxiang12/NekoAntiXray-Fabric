@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 假矿石管理器 - Fabric版本
+ * 增强版：添加了控制台通知功能
  */
 public class FakeOreManager {
     private static final Logger LOGGER = LoggerFactory.getLogger("nekoantixray");
@@ -87,6 +88,9 @@ public class FakeOreManager {
                     player.getName().getString(), x, y, z, oreType);
             }
         }
+        
+        // 添加控制台通知 - 生成假矿石时通知
+        LOGGER.info("[NekoAntiXray] 为玩家 {} 生成了 {} 个假矿石", player.getName().getString(), amount);
     }
 
     /**
@@ -107,6 +111,40 @@ public class FakeOreManager {
         ChunkPos chunkPos = new ChunkPos(pos);
         Set<BlockPos> ores = fakeOres.get(chunkPos);
         return ores != null && ores.contains(pos);
+    }
+    
+    /**
+     * 检查方块是否为假矿石（带控制台通知功能）
+     * @param pos 方块位置
+     * @param player 挖掘的玩家
+     * @return 是否为假矿石
+     */
+    public boolean isFakeOre(BlockPos pos, ServerPlayerEntity player) {
+        ChunkPos chunkPos = new ChunkPos(pos);
+        Set<BlockPos> ores = fakeOres.get(chunkPos);
+        boolean isFake = ores != null && ores.contains(pos);
+        
+        // 如果是假矿石，输出控制台消息
+        if (isFake && player != null) {
+            // 获取玩家当前违规值（如果可用）
+            double vl = 0.0;
+            try {
+                vl = mod.getPlayerManager().getPlayerData(player.getUuid()).getViolationLevel();
+            } catch (Exception e) {
+                // 忽略错误，使用默认值0.0
+            }
+            
+            // 输出详细的控制台通知
+            String playerName = player.getName().getString();
+            String playerUUID = player.getUuidAsString();
+            String position = String.format("(%.1f, %.1f, %.1f)", player.getX(), player.getY(), player.getZ());
+            String worldName = player.getWorld().getRegistryKey().getValue().toString();
+            
+            LOGGER.warn("[NekoAntiXray] 检测到玩家 {} ({}) 挖掘假矿石! 位置: {} | 世界: {} | 违规值: {}", 
+                playerName, playerUUID, position, worldName, String.format("%.2f", vl));
+        }
+        
+        return isFake;
     }
 
     /**
@@ -130,5 +168,45 @@ public class FakeOreManager {
      */
     public void clearChunk(ChunkPos chunkPos) {
         fakeOres.remove(chunkPos);
+    }
+    
+    /**
+     * 记录玩家违规值增加（带控制台通知）
+     * @param player 玩家
+     * @param violationAdded 增加的违规值
+     * @param totalViolation 总违规值
+     * @param reason 原因
+     */
+    public void logViolation(ServerPlayerEntity player, double violationAdded, double totalViolation, String reason) {
+        if (player == null) return;
+        
+        String playerName = player.getName().getString();
+        String playerUUID = player.getUuidAsString();
+        String position = String.format("(%.1f, %.1f, %.1f)", player.getX(), player.getY(), player.getZ());
+        String worldName = player.getWorld().getRegistryKey().getValue().toString();
+        
+        LOGGER.warn("[NekoAntiXray] 玩家 {} 违规值增加 +{} (总计: {}) | 原因: {} | 位置: {} | 世界: {}", 
+            playerName, String.format("%.2f", violationAdded), String.format("%.2f", totalViolation), 
+            reason, position, worldName);
+    }
+    
+    /**
+     * 记录玩家达到违规阈值（带控制台通知）
+     * @param player 玩家
+     * @param violationLevel 违规值
+     * @param threshold 阈值
+     * @param action 执行的操作
+     */
+    public void logThresholdReached(ServerPlayerEntity player, double violationLevel, double threshold, String action) {
+        if (player == null) return;
+        
+        String playerName = player.getName().getString();
+        String playerUUID = player.getUuidAsString();
+        String position = String.format("(%.1f, %.1f, %.1f)", player.getX(), player.getY(), player.getZ());
+        String worldName = player.getWorld().getRegistryKey().getValue().toString();
+        
+        LOGGER.error("[NekoAntiXray] 玩家 {} 违规值 {} 达到阈值 {} | 执行操作: {} | 位置: {} | 世界: {}", 
+            playerName, String.format("%.2f", violationLevel), String.format("%.2f", threshold), 
+            action, position, worldName);
     }
 }
